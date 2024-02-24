@@ -8,3 +8,13 @@ create table users (
     height double,
     created_at timestamp default current_timestamp
 );
+
+create table smear_detail (
+    id int auto_increment primary key,
+    image longblob,
+    result varchar(255),
+    user_id varchar(255),
+    status_ varchar(255),
+    created_at timestamp default current_timestamp,
+    foreign key (user_id) references users(mail_id)
+);

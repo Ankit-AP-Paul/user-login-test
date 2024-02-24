@@ -1,10 +1,16 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, File, UploadFile
+from fastapi.responses import JSONResponse
 import mysql.connector
 from pydantic import BaseModel
 import hashlib
+import os
 
 
 app = FastAPI()
+
+UPLOAD_FOLDER = "uploads"
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
 class UserRegistration(BaseModel):
     name: str
@@ -18,8 +24,8 @@ class UserRegistration(BaseModel):
 mydb = mysql.connector.connect(
   host="localhost",
   user="root",
-  password="",
-  database=""
+  password="AccessMe",
+  database="semicolons"
 )
 
 def hash_password(password):
@@ -49,16 +55,36 @@ def user_registration(user: UserRegistration):
 
 @app.post("/user_login")
 def user_login(email: str, password: str):
-    mycursor = mydb.cursor()
+    mycursor = mydb.cursor(dictionary=True)
     hashed_password = hash_password(password)
     sql = "SELECT * FROM users WHERE mail_id = %s AND password_ = %s"
     val = (email, hashed_password)
     mycursor.execute(sql, val)
     myresult = mycursor.fetchall()
     if len(myresult) > 0:
-        return {"message": "User Logged In"}
+        user = myresult[0]
+        del user['password_']
+        del user['role']
+        del user['created_at']
+        return user
     else:
         raise HTTPException(status_code=403, detail="Login error")
+
+@app.post("/upload_image/")
+async def upload_image(user_id: str, file: UploadFile = File(...)):
+    try:
+        mycursor = mydb.cursor()
+        contents = await file.read()
+        file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+        sql = "INSERT INTO smear_detail (user_id, image) VALUES (%s , %s)"
+        val = (user_id, contents, )
+        mycursor.execute(sql, val)
+        mydb.commit()
+        with open(file_path, "wb") as f:
+            f.write(contents)        
+        return JSONResponse(content={"message": "File uploaded successfully", "file_name": file.filename})
+    except Exception as e:
+        return JSONResponse(content={"message": "Error occurred", "error": str(e)}, status_code=500)
 
 
 
